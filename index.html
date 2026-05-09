@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Professeur Kem – PX-19 : Le Script</title>
+<link href="https://fonts.googleapis.com/css2?family=Special+Elite&family=Courier+Prime:ital@0;1&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --paper: #f5f5f0;
+    --ink: #111;
+    --accent: #222;
+    --grey: #666;
+    --light-grey: #aaa;
+  }
+
+  html, body {
+    width: 100%; height: 100%;
+    background: transparent;
+    overflow: hidden;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Courier Prime', monospace;
+  }
+
+  #scene {
+    perspective: 2000px;
+    width: 100vw; height: 100vh;
+    display: flex; align-items: center; justify-content: center;
+    position: relative;
+  }
+
+  #book-wrapper {
+    position: relative;
+    width: 700px; height: 500px;
+    transform-style: preserve-3d;
+    transform: scale(1.2);
+  }
+
+  #cover-container {
+    position: absolute;
+    width: 350px; height: 500px;
+    left: 50%; transform: translateX(-50%);
+    transform-origin: left center;
+    transform-style: preserve-3d;
+    z-index: 100;
+    cursor: pointer;
+    transition: filter 0.3s;
+  }
+  #cover-container:hover { filter: brightness(1.08); }
+
+  .cover-face {
+    position: absolute; inset: 0;
+    backface-visibility: hidden;
+    border-radius: 2px 6px 6px 2px;
+    overflow: hidden;
+  }
+  .cover-front {
+    background: #000;
+    border: 1px solid #333;
+    box-shadow: 4px 0 24px rgba(0,0,0,0.9), inset -3px 0 10px rgba(0,0,0,0.6);
+    overflow: hidden;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    padding: 30px 24px;
+  }
+  .cover-back {
+    transform: rotateY(180deg);
+    background: #000;
+    border: 1px solid #222;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  .cover-click-hint {
+    position: absolute; bottom: -34px; left: 50%; transform: translateX(-50%);
+    font-family: 'Special Elite', cursive; font-size: 11px;
+    color: #888; letter-spacing: 2px;
+    animation: pulse-hint 2s ease-in-out infinite;
+    white-space: nowrap;
+  }
+  @keyframes pulse-hint { 0%,100%{ opacity:0.4; } 50%{ opacity:1; } }
+
+  .cover-spine {
+    position: absolute;
+    left: -14px; top: 0; width: 14px; height: 500px;
+    background: linear-gradient(90deg, #000, #111, #000);
+    border-left: 1px solid #000;
+    border-right: 1px solid #222;
+    transform: rotateY(-90deg) translateX(-7px);
+    transform-origin: right center;
+  }
+
+  #pages-stack {
+    position: absolute;
+    left: 50%; top: 0;
+    width: 350px; height: 500px;
+    background: linear-gradient(90deg, #ddd, #f5f5f0 10%, #eee 90%, #ccc);
+    border-radius: 0 6px 6px 0;
+    box-shadow: 6px 4px 20px rgba(0,0,0,0.4);
+    overflow: hidden;
+    display: none;
+  }
+
+  #left-page {
+    position: absolute;
+    left: 0; top: 0;
+    width: 350px; height: 500px;
+    background: var(--paper);
+    border-right: 1px solid #ccc;
+    overflow: hidden;
+    box-shadow: inset -6px 0 12px rgba(0,0,0,0.05);
+    display: none;
+  }
+
+  #flip-container {
+    position: absolute;
+    left: 50%; top: 0;
+    width: 350px; height: 500px;
+    transform-origin: left center;
+    transform-style: preserve-3d;
+    transform: rotateY(0deg);
+    transition: transform 0.9s cubic-bezier(0.645, 0.045, 0.355, 1.000);
+    z-index: 10;
+    pointer-events: none;
+    display: none;
+  }
+
+  .flip-face {
+    position: absolute; inset: 0;
+    backface-visibility: hidden;
+    overflow: hidden;
+  }
+  #flip-front { background: var(--paper); box-shadow: inset -4px 0 12px rgba(0,0,0,0.07); }
+  #flip-back  { background: var(--paper); transform: rotateY(180deg); box-shadow: inset 4px 0 12px rgba(0,0,0,0.07); }
+
+  .page-content {
+    width: 100%; height: 100%;
+    padding: 26px 28px 20px;
+    position: relative;
+    display: flex; flex-direction: column;
+    background: var(--paper);
+  }
+
+  .page-number {
+    position: absolute; bottom: 10px;
+    font-family: 'Courier Prime', monospace; font-size: 10px;
+    color: var(--grey); letter-spacing: 1px;
+  }
+  .page-number.left  { left: 28px; }
+  .page-number.right { right: 28px; }
+
+  /* Script formatting */
+  .script-header {
+    font-family: 'Special Elite', cursive;
+    font-size: 9px; letter-spacing: 3px; text-transform: uppercase;
+    color: var(--grey);
+    margin-bottom: 6px;
+    border-bottom: 1px solid #ccc;
+    padding-bottom: 4px;
+  }
+  .script-title {
+    font-family: 'Courier Prime', monospace;
+    font-size: 13px; font-weight: 700;
+    color: var(--ink);
+    margin-bottom: 12px; line-height: 1.2;
+    text-align: center;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  .script-body {
+    font-family: 'Courier Prime', monospace;
+    font-size: 10.5px; line-height: 1.7;
+    color: var(--ink);
+    flex: 1; overflow: hidden;
+  }
+  .scene-heading {
+    font-weight: 700;
+    text-transform: uppercase;
+    margin: 8px 0 4px;
+    font-size: 10px;
+    letter-spacing: 0.5px;
+  }
+  .action {
+    margin-bottom: 6px;
+    color: #222;
+  }
+  .character {
+    text-align: center;
+    font-weight: 700;
+    text-transform: uppercase;
+    margin-top: 8px; margin-bottom: 0;
+    font-size: 10.5px;
+  }
+  .dialogue {
+    margin: 0 30px 6px;
+    color: #333;
+    font-style: italic;
+    font-size: 10px;
+    line-height: 1.5;
+  }
+  .parenthetical {
+    margin: 0 40px 2px;
+    color: var(--grey);
+    font-size: 9.5px;
+  }
+  .divider {
+    text-align: center; color: #bbb;
+    font-size: 12px; margin: 6px 0;
+    letter-spacing: 6px;
+  }
+
+  #nav-prev, #nav-next {
+    position: absolute; top: 50%; transform: translateY(-50%);
+    background: rgba(0,0,0,0.08);
+    border: 1px solid #bbb;
+    color: #666;
+    width: 36px; height: 60px;
+    cursor: pointer; font-size: 18px;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.3s; z-index: 200;
+    font-family: serif; user-select: none;
+  }
+  #nav-prev { left: -52px; border-radius: 6px 0 0 6px; }
+  #nav-next { right: -52px; border-radius: 0 6px 6px 0; }
+  #nav-prev:hover, #nav-next:hover { background: rgba(0,0,0,0.15); }
+  #nav-prev.hidden, #nav-next.hidden { opacity:0; pointer-events:none; }
+
+  #page-indicator {
+    position: absolute; bottom: -44px; left: 50%; transform: translateX(-50%);
+    font-family: 'Courier Prime', monospace; font-size: 11px;
+    color: #888; letter-spacing: 2px;
+    white-space: nowrap;
+  }
+
+  #cover-container.opening {
+    animation: cover-open 1.2s cubic-bezier(0.645, 0.045, 0.355, 1.000) forwards;
+  }
+  @keyframes cover-open {
+    0%   { transform: translateX(-50%) rotateY(0deg); }
+    100% { transform: translateX(-50%) rotateY(-160deg); }
+  }
+  #cover-container.opened {
+    transform: translateX(-50%) rotateY(-160deg);
+    pointer-events: none;
+  }
+</style>
+</head>
+<body>
+<div id="scene">
+  <div id="book-wrapper">
+
+    <div id="left-page">
+      <div class="page-content" id="left-content"></div>
+    </div>
+
+    <div id="pages-stack"><div id="pages-stack-content" class="page-content" style="background:var(--paper);"></div></div>
+
+    <div id="flip-container">
+      <div class="flip-face" id="flip-front">
+        <div class="page-content" id="flip-front-content"></div>
+      </div>
+      <div class="flip-face" id="flip-back">
+        <div class="page-content" id="flip-back-content"></div>
+      </div>
+    </div>
+
+    <!-- COVER -->
+    <div id="cover-container">
+      <div class="cover-face cover-front">
+        <div style="text-align:center;width:100%;">
+          <div style="font-family:'Special Elite',cursive;font-size:8px;color:#444;letter-spacing:4px;text-transform:uppercase;margin-bottom:20px;">Premier jet — v0.4</div>
+          <div style="width:60px;height:1px;background:#333;margin:0 auto 20px;"></div>
+          <div style="font-family:'Courier Prime',monospace;font-size:11px;color:#555;letter-spacing:3px;text-transform:uppercase;margin-bottom:12px;">Un film de</div>
+          <div style="font-family:'Special Elite',cursive;font-size:14px;color:#888;letter-spacing:2px;margin-bottom:30px;">Professeur Kem</div>
+          <div style="width:60px;height:2px;background:#fff;margin:0 auto 24px;"></div>
+          <div style="font-family:'Courier Prime',monospace;font-size:28px;font-weight:700;color:#fff;line-height:1.1;letter-spacing:2px;margin-bottom:8px;">PX-19</div>
+          <div style="font-family:'Courier Prime',monospace;font-size:11px;color:#777;letter-spacing:3px;margin-bottom:30px;">ou comment Psycho a raté</div>
+          <div style="font-family:'Courier Prime',monospace;font-size:10px;color:#555;letter-spacing:2px;">la bombe sur Cayo Perico</div>
+          <div style="width:60px;height:1px;background:#333;margin:30px auto 20px;"></div>
+          <div style="font-family:'Special Elite',cursive;font-size:8px;color:#444;letter-spacing:3px;">SCRIPT COMPLET — LOS SANTOS PICTURES</div>
+        </div>
+      </div>
+      <div class="cover-face cover-back">
+        <div style="color:#333;font-family:'Courier Prime',monospace;font-size:10px;letter-spacing:1px;text-align:center;padding:20px;">
+          Los Santos Pictures<br>
+          <div style="font-size:8px;margin-top:6px;color:#222;">Production 2024</div>
+        </div>
+      </div>
+      <div class="cover-spine"></div>
+      <div class="cover-click-hint">▶ Cliquez pour ouvrir</div>
+    </div>
+
+    <button id="nav-prev" class="hidden" onclick="flipPrev()">◀</button>
+    <button id="nav-next" class="hidden" onclick="flipNext()">▶</button>
+    <div id="page-indicator" style="display:none;"></div>
+  </div>
+</div>
+
+<script>
+const spreads = [
+
+  {
+    left: `<div class="script-header">PX-19 — Script — Page de titre</div>
+<div class="script-body" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;text-align:center;">
+<div style="font-size:11px;color:#aaa;letter-spacing:3px;margin-bottom:16px;">LOS SANTOS PICTURES PRÉSENTE</div>
+<div style="font-size:22px;font-weight:700;letter-spacing:3px;margin-bottom:6px;">PX-19</div>
+<div style="font-size:11px;color:#666;margin-bottom:4px;font-style:italic;">ou comment Psycho a raté la bombe</div>
+<div style="font-size:10px;color:#aaa;margin-bottom:24px;">sur Cayo Perico</div>
+<div style="width:40px;height:1px;background:#ccc;margin:0 auto 20px;"></div>
+<div style="font-size:9px;color:#aaa;letter-spacing:2px;">Écrit par le Professeur Kem</div>
+<div style="font-size:9px;color:#bbb;margin-top:6px;">Premier jet — usage interne</div>
+</div>
+<div class="page-number left">i</div>`,
+
+    right: `<div class="script-header">Note d'intention</div>
+<div class="script-title">Pourquoi ce Film</div>
+<div class="script-body">
+<div class="action">Ce script est basé sur des faits réels. Enfin. Presque. Disons qu'il est basé sur des faits réels légèrement dramatisés, quelques inexactitudes scientifiques volontaires, et beaucoup de mauvaise foi de la part des personnages principaux.</div>
+<div class="divider">* * *</div>
+<div class="action">Le Professeur Kem tient à préciser que PX-19 est une bactérie totalement inoffensive qu'il a découverte en 2019 dans les fonds de Cayo Perico. Ce film n'est pas de sa faute.</div>
+<div class="action">Ce qui suit est une reconstitution des événements qui ont conduit Los Santos à bombarder une île entière à cause d'une bactérie incapable de faire du mal à un moustique.</div>
+<div class="action">Le Professeur Kem a approuvé ce projet sous la contrainte.</div>
+</div>
+<div class="page-number right">ii</div>`
+  },
+
+  {
+    left: `<div class="script-header">Acte I — Scène 1</div>
+<div class="script-title">La Découverte</div>
+<div class="script-body">
+<div class="scene-heading">EXT. BAIE DE CAYO PERICO — JOUR</div>
+<div class="action">Un bateau de recherche. Mer calme. Le PROFESSEUR KEM, 50 ans, barbe en désordre, lunettes de travers, remonte une carotte de sédiment à 340 mètres de profondeur. Il observe un truc verdâtre collé au bout.</div>
+<div class="character">KEM</div>
+<div class="parenthetical">(regardant l'échantillon avec émerveillement)</div>
+<div class="dialogue">Fascinant. Une nouvelle espèce bactérienne. Anaérobie stricte. Bioluminescente. Et totalement inoffensive.</div>
+<div class="character">ASSISTANT (O.S.)</div>
+<div class="dialogue">Professeur, vous devriez peut-être ne pas appeler ça PX-19. Ça fait un peu... apocalyptique.</div>
+<div class="character">KEM</div>
+<div class="dialogue">P pour Perico. X pour inconnu. 19 pour 2019. C'est de la nomenclature, pas un film catastrophe.</div>
+<div class="action">Silence gêné de l'assistant.</div>
+</div>
+<div class="page-number left">1</div>`,
+
+    right: `<div class="script-header">Acte I — Scène 2</div>
+<div class="script-body">
+<div class="scene-heading">INT. LABORATOIRE — UNIVERSITÉ DE LOS SANTOS — NUIT</div>
+<div class="action">Kem observe ses cultures sous microscope. La bactérie émet une faible lueur bleue-verte pendant quelques secondes. C'est beau. C'est scientifique. Ce n'est absolument pas dangereux.</div>
+<div class="character">KEM</div>
+<div class="parenthetical">(prenant des notes)</div>
+<div class="dialogue">Aucune pathogénicité. Aucune toxine. Elle meurt au contact de l'oxygène. Elle ne ferait pas de mal à une salades de concombres.</div>
+<div class="action">Son téléphone sonne. Un numéro masqué.</div>
+<div class="character">KEM</div>
+<div class="dialogue">Allo ?</div>
+<div class="character">VOIX MYSTÉRIEUSE</div>
+<div class="dialogue">Professeur Kem. Nous avons lu vos notes sur le PX-19.</div>
+<div class="character">KEM</div>
+<div class="dialogue">Elles sont confidentielles. Comment vous les avez eues ?</div>
+<div class="character">VOIX MYSTÉRIEUSE</div>
+<div class="dialogue">On a nos méthodes.</div>
+<div class="action">Il raccroche. Kem reste figé.</div>
+</div>
+<div class="page-number right">2</div>`
+  },
+
+  {
+    left: `<div class="script-header">Acte II — Scène 3</div>
+<div class="script-title">Holixxod s'en mêle</div>
+<div class="script-body">
+<div class="scene-heading">INT. BUREAU DE PRODUCTION — HOLIXXOD — LOS SANTOS</div>
+<div class="action">Un producteur CHAD MERCER, 40 ans, costume blanc, lunettes de soleil en intérieur, fait les cent pas devant un tableau de pitch.</div>
+<div class="character">MERCER</div>
+<div class="dialogue">On fait une série. Une bactérie des fonds marins. Elle transforme les gens en zombies. L'île explose à la fin. On l'appelle ZERO HOUR.</div>
+<div class="character">SCÉNARISTE</div>
+<div class="dialogue">Mais... la vraie bactérie est inoffensive d'après les notes qu'on a volées.</div>
+<div class="character">MERCER</div>
+<div class="parenthetical">(sans s'arrêter)</div>
+<div class="dialogue">On s'en fout. Les gens veulent des zombies. On met des zombies.</div>
+<div class="character">SCÉNARISTE</div>
+<div class="dialogue">Et le Professeur Kem ?</div>
+<div class="character">MERCER</div>
+<div class="dialogue">On lui envoie un chèque. S'il refuse, on dit que c'est de la fiction.</div>
+</div>
+<div class="page-number left">3</div>`,
+
+    right: `<div class="script-header">Acte II — Scène 4</div>
+<div class="script-body">
+<div class="scene-heading">INT. APPARTEMENT DE KEM — NUIT</div>
+<div class="action">Kem regarde le premier épisode de ZERO HOUR sur Holixxod. On voit à l'écran une bactérie "PX-19" se répandre par voie aérienne et transformer les habitants d'une île en créatures hostiles. Kem se lève lentement du canapé.</div>
+<div class="character">KEM</div>
+<div class="parenthetical">(voix calme, effrayante)</div>
+<div class="dialogue">PX-19 est anaérobie stricte. Elle meurt en dix minutes à l'air libre. Elle ne se transmet pas par voie aérienne. Elle ne transforme personne en rien du tout.</div>
+<div class="action">Il regarde la caméra.</div>
+<div class="character">KEM</div>
+<div class="dialogue">Je vais écrire un script pour corriger ça.</div>
+<div class="action">Fondus au noir. Titre : "Ce que vous venez de voir, c'est le script de Kem. La suite, c'est ce qui s'est vraiment passé après."</div>
+</div>
+<div class="page-number right">4</div>`
+  },
+
+  {
+    left: `<div class="script-header">Acte II — Scène 5</div>
+<div class="script-title">L'Escalade</div>
+<div class="script-body">
+<div class="scene-heading">INT. MAIRIE DE LOS SANTOS — SALLE DE CRISE</div>
+<div class="action">Réunion d'urgence. Le MAIRE, en sueur, face à une projection montrant une carte de Cayo Perico entourée de rouge clignotant. Autour de la table : des généraux, des conseillers, et PSYCHO — un contractuel militaire en survêtement, l'air très concentré sur son téléphone.</div>
+<div class="character">MAIRE</div>
+<div class="dialogue">Messieurs, la série Holixxod a semé la panique. Les citoyens pensent que PX-19 va les transformer en zombies. Que fait-on ?</div>
+<div class="character">GÉNÉRAL</div>
+<div class="dialogue">On pourrait simplement expliquer que c'est une fiction et que la bactérie est inoffensive.</div>
+<div class="action">Silence. Tout le monde le regarde comme s'il venait de dire quelque chose d'insensé.</div>
+<div class="character">MAIRE</div>
+<div class="dialogue">Autre chose ?</div>
+</div>
+<div class="page-number left">5</div>`,
+
+    right: `<div class="script-header">Acte II — Scène 6</div>
+<div class="script-body">
+<div class="scene-heading">INT. MAIRIE DE LOS SANTOS — SUITE</div>
+<div class="character">PSYCHO</div>
+<div class="parenthetical">(levant la tête de son téléphone)</div>
+<div class="dialogue">On bombarde l'île.</div>
+<div class="character">GÉNÉRAL</div>
+<div class="dialogue">Pardon ?</div>
+<div class="character">PSYCHO</div>
+<div class="dialogue">Cayo Perico. On balance une bombe. Propre. Efficace. Plus d'île, plus de problème.</div>
+<div class="character">CONSEILLER</div>
+<div class="dialogue">Il y a des gens qui vivent là-bas. Et des touristes. Et... c'est une bactérie inoffensive.</div>
+<div class="character">PSYCHO</div>
+<div class="parenthetical">(regardant à nouveau son téléphone)</div>
+<div class="dialogue">Je reste sur ma position.</div>
+<div class="character">MAIRE</div>
+<div class="parenthetical">(après un long silence)</div>
+<div class="dialogue">On vote.</div>
+</div>
+<div class="page-number right">6</div>`
+  },
+
+  {
+    left: `<div class="script-header">Acte III — Scène 7</div>
+<div class="script-title">La Bombe</div>
+<div class="script-body">
+<div class="scene-heading">EXT. BASE MILITAIRE — AUBE</div>
+<div class="action">Psycho est seul sur le tarmac. Devant lui, un avion militaire. Il tient une tablette avec les coordonnées GPS de Cayo Perico. Il a l'air très sûr de lui. C'est inquiétant.</div>
+<div class="character">PSYCHO</div>
+<div class="parenthetical">(tapotant ses coordonnées)</div>
+<div class="dialogue">26.7°N, 82.5°W. L'île est là.</div>
+<div class="action">Le TECHNICIEN regarde l'écran, puis regarde Psycho.</div>
+<div class="character">TECHNICIEN</div>
+<div class="dialogue">Monsieur... ces coordonnées sont... dans le Golfe du Mexique. Il n'y a rien là.</div>
+<div class="character">PSYCHO</div>
+<div class="dialogue">J'ai googlemaps.</div>
+<div class="character">TECHNICIEN</div>
+<div class="dialogue">C'était des coordonnées d'un restaurant à Miami.</div>
+<div class="action">Silence.</div>
+<div class="character">PSYCHO</div>
+<div class="dialogue">Je corrige.</div>
+</div>
+<div class="page-number left">7</div>`,
+
+    right: `<div class="script-header">Acte III — Scène 8</div>
+<div class="script-body">
+<div class="scene-heading">EXT. CAYO PERICO — QUELQUES HEURES PLUS TARD</div>
+<div class="action">La bombe tombe. Sur le mauvais côté de l'île. Elle atterrit dans une zone rocheuse inhabitée. Une explosion spectaculaire. Des flammes. De la fumée. Et absolument aucun effet sur quoi que ce soit de bactérien, puisque PX-19 vit à 340 mètres sous la mer et meurt au contact de l'air.</div>
+<div class="character">PSYCHO (RADIO)</div>
+<div class="dialogue">Mission accomplie.</div>
+<div class="character">GÉNÉRAL (RADIO)</div>
+<div class="dialogue">Tu as bombardé un rocher inhabité.</div>
+<div class="character">PSYCHO (RADIO)</div>
+<div class="dialogue">Un rocher potentiellement contaminé.</div>
+<div class="character">GÉNÉRAL (RADIO)</div>
+<div class="dialogue">...</div>
+<div class="character">PSYCHO (RADIO)</div>
+<div class="dialogue">De rien.</div>
+</div>
+<div class="page-number right">8</div>`
+  },
+
+  {
+    left: `<div class="script-header">Épilogue</div>
+<div class="script-title">Fin</div>
+<div class="script-body">
+<div class="scene-heading">INT. LABORATOIRE DE KEM — LENDEMAIN</div>
+<div class="action">Kem regarde les infos. On parle du "bombardement préventif de Cayo Perico contre la menace PX-19". Il boit son café. Il soupire. Ses cultures de PX-19 émettent leur petite lumière bleue, tranquillement, dans l'incubateur.</div>
+<div class="character">KEM</div>
+<div class="parenthetical">(à la bactérie)</div>
+<div class="dialogue">Toi et moi on sait que tu es inoffensive. C'est l'essentiel.</div>
+<div class="action">Il se retourne vers la caméra.</div>
+<div class="character">KEM</div>
+<div class="dialogue">PX-19 est toujours là. Elle brille. Elle ne fait de mal à personne. Et personne n'a été transformé en zombie. Cayo Perico a un rocher en moins.</div>
+<div class="divider">* * *</div>
+<div class="action">FIN.</div>
+</div>
+<div class="page-number left">9</div>`,
+
+    right: `<div class="script-header">Générique</div>
+<div class="script-body" style="display:flex;flex-direction:column;justify-content:center;height:100%;font-size:10px;color:#555;">
+<div style="text-align:center;margin-bottom:16px;font-size:11px;font-weight:700;color:#222;letter-spacing:2px;">PX-19</div>
+<div style="text-align:center;font-style:italic;color:#888;margin-bottom:20px;font-size:9.5px;">ou comment Psycho a raté la bombe sur Cayo Perico</div>
+<div style="display:flex;flex-direction:column;gap:6px;">
+  <div><strong>Professeur Kem</strong> — lui-même, contraint</div>
+  <div><strong>Psycho</strong> — contractuel militaire, GPS douteux</div>
+  <div><strong>Chad Mercer</strong> — producteur, sans scrupules</div>
+  <div><strong>PX-19</strong> — bactérie, inoffensive, incomprise</div>
+</div>
+<div style="margin-top:16px;border-top:1px solid #ddd;padding-top:12px;text-align:center;font-size:9px;color:#aaa;">
+  Aucune bactérie n'a été blessée lors du tournage.<br>
+  Cayo Perico a perdu un rocher.<br>
+  Holixxod n'a pas rappelé.
+</div>
+<div style="text-align:center;margin-top:14px;font-family:'Special Elite',cursive;font-size:8px;color:#bbb;letter-spacing:2px;">LOS SANTOS PICTURES · 2024</div>
+</div>
+<div class="page-number right">10</div>`
+  }
+
+];
+
+let currentSpread = 0;
+let isOpen = false;
+let isAnimating = false;
+const TOTAL_SPREADS = spreads.length;
+
+const cover         = document.getElementById('cover-container');
+const flipContainer = document.getElementById('flip-container');
+const flipFront     = document.getElementById('flip-front-content');
+const flipBack      = document.getElementById('flip-back-content');
+const leftContent   = document.getElementById('left-content');
+const navPrev       = document.getElementById('nav-prev');
+const navNext       = document.getElementById('nav-next');
+const indicator     = document.getElementById('page-indicator');
+
+function renderSpread(index) {
+  const s = spreads[index];
+  leftContent.innerHTML = s.left;
+  flipFront.innerHTML   = s.right;
+  document.getElementById('pages-stack-content').innerHTML =
+    (index + 1 < TOTAL_SPREADS) ? spreads[index + 1].right : '';
+  if (index + 1 < TOTAL_SPREADS) {
+    flipBack.innerHTML = spreads[index + 1].left;
+  } else {
+    flipBack.innerHTML = '<div class="page-content"><div style="display:flex;align-items:center;justify-content:center;height:100%;"><div style="font-family:\'Courier Prime\',monospace;font-size:12px;color:#aaa;letter-spacing:2px;">FIN DU SCRIPT</div></div></div>';
+  }
+  updateNav();
+  updateIndicator();
+}
+
+function updateNav() {
+  navPrev.classList.toggle('hidden', currentSpread <= 0);
+  navNext.classList.toggle('hidden', currentSpread >= TOTAL_SPREADS - 1);
+}
+
+function updateIndicator() {
+  if (!isOpen) { indicator.style.display = 'none'; return; }
+  indicator.style.display = 'block';
+  indicator.textContent = 'Pages ' + (currentSpread * 2 + 2) + '-' + (currentSpread * 2 + 3) + ' / ' + (TOTAL_SPREADS * 2 + 1);
+}
+
+function openBook() {
+  if (isOpen || isAnimating) return;
+  isAnimating = true;
+  cover.classList.add('opening');
+  cover.querySelector('.cover-click-hint').style.display = 'none';
+  setTimeout(function() {
+    cover.classList.remove('opening');
+    cover.classList.add('opened');
+    cover.style.display = 'none';
+    document.getElementById('left-page').style.display   = 'block';
+    document.getElementById('pages-stack').style.display = 'block';
+    flipContainer.style.display = 'block';
+    isOpen = true;
+    isAnimating = false;
+    renderSpread(0);
+    navPrev.classList.add('hidden');
+    navNext.classList.remove('hidden');
+    indicator.style.display = 'block';
+    updateIndicator();
+  }, 1200);
+}
+
+function doFlip(direction) {
+  if (isAnimating) return;
+  if (direction === 'next' && currentSpread >= TOTAL_SPREADS - 1) return;
+  if (direction === 'prev' && currentSpread <= 0) return;
+
+  isAnimating = true;
+  flipContainer.style.transition = 'transform 0.9s cubic-bezier(0.645, 0.045, 0.355, 1.000)';
+
+  if (direction === 'next') {
+    flipBack.innerHTML = (currentSpread + 1 < TOTAL_SPREADS)
+      ? spreads[currentSpread + 1].left
+      : '<div class="page-content"><div style="display:flex;align-items:center;justify-content:center;height:100%;"><div style="font-family:\'Courier Prime\',monospace;font-size:12px;color:#aaa;">FIN</div></div></div>';
+
+    document.getElementById('pages-stack-content').innerHTML = '';
+    flipContainer.style.transform = 'rotateY(-180deg)';
+
+    setTimeout(function() {
+      document.getElementById('pages-stack-content').innerHTML =
+        (currentSpread + 1 < TOTAL_SPREADS) ? spreads[currentSpread + 1].right : '';
+    }, 460);
+
+    setTimeout(function() {
+      currentSpread++;
+      flipContainer.style.transition = 'none';
+      flipContainer.style.transform = 'rotateY(0deg)';
+      renderSpread(currentSpread);
+      isAnimating = false;
+    }, 920);
+
+  } else {
+    leftContent.innerHTML = spreads[currentSpread - 1].left;
+    flipBack.innerHTML    = spreads[currentSpread - 1].right;
+    document.getElementById('pages-stack-content').innerHTML = spreads[currentSpread - 1].right;
+    flipContainer.style.transform = 'rotateY(180deg)';
+    setTimeout(function() {
+      currentSpread--;
+      flipContainer.style.transition = 'none';
+      flipContainer.style.transform = 'rotateY(0deg)';
+      flipFront.innerHTML = spreads[currentSpread].right;
+      document.getElementById('pages-stack-content').innerHTML =
+        (currentSpread + 1 < TOTAL_SPREADS) ? spreads[currentSpread + 1].right : '';
+      if (currentSpread + 1 < TOTAL_SPREADS)
+        flipBack.innerHTML = spreads[currentSpread + 1].left;
+      updateNav();
+      updateIndicator();
+      isAnimating = false;
+    }, 920);
+  }
+}
+
+function flipNext() { doFlip('next'); }
+function flipPrev() { doFlip('prev'); }
+
+cover.addEventListener('click', openBook);
+
+document.addEventListener('keydown', function(e) {
+  if (!isOpen) return;
+  if (e.key === 'ArrowRight' || e.key === 'ArrowDown') flipNext();
+  if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp')   flipPrev();
+});
+
+flipFront.innerHTML   = '';
+flipBack.innerHTML    = '';
+leftContent.innerHTML = '';
+</script>
+</body>
+</html>
